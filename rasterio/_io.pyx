@@ -544,6 +544,8 @@ cdef class RasterReader(_base.DatasetReader):
         indexes of the columns at which the window starts and stops. For
         example, ((0, 2), (0, 2)) defines a 2x2 window at the upper left
         of the raster dataset.
+
+        See the `read` method for semantics of `masked`.
         """
         return self.read(bidx, out=out, window=window, masked=masked)
 
@@ -578,10 +580,10 @@ cdef class RasterReader(_base.DatasetReader):
         masked : bool, optional
             The return type will be either a regular NumPy array, or
             a masked NumPy array depending on the `masked` argument. The
-            return type is forced if either `True` or `False`, but will
-            be chosen if `None`.  For `masked=None` (default), the array
-            will be the same type as `out` (if used), or will be masked
-            if any of the nodatavals are not `None`.
+            return type is forced if either `False` or `True`, but will
+            be chosen automatically if `None`.  When `masked=None` (default),
+            the array will be the same type as `out` (if used), or will be
+            masked if any of the dataset's bands' "nodata" value are not `None`.
 
         boundless : bool, optional (default `False`)
             If `True`, windows that extend beyond the dataset's extent
@@ -702,9 +704,10 @@ cdef class RasterReader(_base.DatasetReader):
                         data if len(data.shape) == 3 else [data]):
                     dst[roff:roff+data_h, coff:coff+data_w] = src
 
-        # Masking the output. TODO: explain the logic better.
+        # Masking the output.
         if masked:
             if len(set(nodatavals)) == 1:
+                # all bands share the same nodataval
                 if nodatavals[0] is None:
                     out = np.ma.masked_array(out, copy=False)
                 elif np.isnan(nodatavals[0]):
@@ -712,6 +715,7 @@ cdef class RasterReader(_base.DatasetReader):
                 else:
                     out = np.ma.masked_equal(out, nodatavals[0], copy=False)
             else:
+                # per-band nodatavals need to be masked one-at-a-time
                 out = np.ma.masked_array(out, copy=False)
                 for aix in range(len(indexes)):
                     if nodatavals[aix] is None:
@@ -738,12 +742,12 @@ cdef class RasterReader(_base.DatasetReader):
 
         See `read_band` for usage of the optional `window` argument.
 
-        The return type will be either a regular NumPy array, or a masked
-        NumPy array depending on the `masked` argument. The return type is
-        forced if either `True` or `False`, but will be chosen if `None`.
-        For `masked=None` (default), the array will be the same type as
-        `out` (if used), or will be masked if any of the nodatavals are
-        not `None`.
+        The return type will be either a regular NumPy array, or a masked NumPy
+        array depending on the `masked` argument. The return type is forced if
+        either `False` or `True`, but will be chosen automatically if `None`.
+        When `masked=None` (default), the array will be the same type as `out`
+        (if used), or will be masked if any of the dataset's bands' "nodata"
+        value are not `None`.
         """
         cdef int height, width, xoff, yoff, aix, bidx, indexes_count
         cdef int retval = 0
